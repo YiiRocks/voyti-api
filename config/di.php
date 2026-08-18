@@ -15,7 +15,7 @@ use Yiisoft\Auth\IdentityWithTokenRepositoryInterface;
 
 return [
     ApiConfig::class => static fn() => new ApiConfig(
-        apiTokenLifespan: $params['yiirocks/voyti-api']['apiTokenLifespan'] ?? 0,
+        apiTokenLifespan: $params['yiirocks/voyti']['api']['apiTokenLifespan'] ?? 0,
     ),
 
     // Token resolution honors API-token expiry. Core still owns `IdentityRepositoryInterface`
