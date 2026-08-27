@@ -12,6 +12,7 @@ use YiiRocks\Voyti\Api\Console\GenerateApiTokenCommand;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use YiiRocks\Voyti\Api\tests\Support\DatabaseTestCase;
 use YiiRocks\Voyti\Api\tests\Support\UserFactoryTrait;
+use YiiRocks\Voyti\Clock\SystemClock;
 use YiiRocks\Voyti\Model\UserToken;
 use Yiisoft\Yii\Console\ExitCode;
 
@@ -56,7 +57,7 @@ final class GenerateApiTokenCommandTest extends DatabaseTestCase
         $output = $this->createMock(OutputInterface::class);
         $output->expects(self::exactly($writelnCount))->method('writeln');
 
-        $command = $this->createCommand(new ApiTokenService());
+        $command = $this->createCommand(new ApiTokenService(new SystemClock()));
         $result = $command->run($input, $output);
 
         self::assertSame($expectedCode, $result);
@@ -69,7 +70,7 @@ final class GenerateApiTokenCommandTest extends DatabaseTestCase
     private function createCommand(?ApiTokenService $apiTokenService = null): GenerateApiTokenCommand
     {
         return new GenerateApiTokenCommand(
-            $apiTokenService ?? new ApiTokenService(),
+            $apiTokenService ?? new ApiTokenService(new SystemClock()),
         );
     }
 }

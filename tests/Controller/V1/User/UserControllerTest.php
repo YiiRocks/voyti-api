@@ -9,6 +9,7 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
+use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -19,7 +20,11 @@ use YiiRocks\Voyti\Api\tests\Support\MailCapture;
 use YiiRocks\Voyti\Api\tests\Support\TestPasswordHasherFactory;
 use YiiRocks\Voyti\Api\tests\Support\UserFactoryTrait;
 use YiiRocks\Voyti\Api\tests\Support\VoytiConfigFactory;
+use YiiRocks\Voyti\Clock\SystemClock;
+use YiiRocks\Voyti\Event\User\AfterAccountUpdateEvent;
+use YiiRocks\Voyti\Event\User\BeforeAccountUpdateEvent;
 use YiiRocks\Voyti\Event\User\UserEvent;
+use YiiRocks\Voyti\Exception\ActionPreventedException;
 use YiiRocks\Voyti\Model\User;
 use YiiRocks\Voyti\Model\UserPasswordHistory;
 use YiiRocks\Voyti\Service\MailService;
@@ -27,6 +32,7 @@ use YiiRocks\Voyti\Service\Password\PasswordGeneratorInterface;
 use YiiRocks\Voyti\Service\Password\PasswordHistoryService;
 use YiiRocks\Voyti\Service\Password\RandomPasswordGenerator;
 use YiiRocks\Voyti\Service\User\UserCreationHelper;
+use YiiRocks\Voyti\Service\User\UserUpdateHelper;
 use YiiRocks\Voyti\VoytiConfig;
 use Yiisoft\DataResponse\Middleware\JsonDataResponseMiddleware;
 use Yiisoft\DataResponse\ResponseFactory\DataResponseFactory;
@@ -41,6 +47,7 @@ final class UserControllerTest extends DatabaseTestCase
 
     private VoytiConfig $config;
     private EventCaptureDispatcher $eventDispatcher;
+    private MailService $mailService;
     private PasswordGeneratorInterface&MockObject $passwordGenerator;
     private DataResponseFactoryInterface&MockObject $responseFactory;
     private UserCreationHelper $userCreationHelper;
@@ -50,11 +57,9 @@ final class UserControllerTest extends DatabaseTestCase
         parent::setUp();
         $this->config = VoytiConfigFactory::create();
         $this->eventDispatcher = new EventCaptureDispatcher();
-        $passwordHasher = TestPasswordHasherFactory::create();
-        $passwordHistoryService = new PasswordHistoryService($passwordHasher, $this->config);
         $mailer = new MailCapture();
         $url = $this->createMock(UrlGeneratorInterface::class);
-        $mailService = new MailService(
+        $this->mailService = new MailService(
             $mailer,
             '/tmp',
             new View(),
@@ -62,13 +67,7 @@ final class UserControllerTest extends DatabaseTestCase
             $url,
             'Test',
         );
-        $this->userCreationHelper = new UserCreationHelper(
-            $mailService,
-            new EventCaptureDispatcher(),
-            $passwordHasher,
-            $this->config,
-            $passwordHistoryService,
-        );
+        $this->userCreationHelper = $this->createUserCreationHelper($this->config);
         $this->responseFactory = $this->createMock(DataResponseFactoryInterface::class);
         $this->passwordGenerator = $this->createMock(PasswordGeneratorInterface::class);
         $this->passwordGenerator->method('generate')->willReturn('fallback-generated-password');
@@ -260,6 +259,7 @@ final class UserControllerTest extends DatabaseTestCase
             passwordGenerator: new RandomPasswordGenerator(),
             passwordHistoryService: new PasswordHistoryService(TestPasswordHasherFactory::create(), $this->config),
             userCreationHelper: $this->userCreationHelper,
+            userUpdateHelper: $this->createUserUpdateHelper($this->config),
             eventDispatcher: $this->eventDispatcher,
         );
 
@@ -388,6 +388,45 @@ final class UserControllerTest extends DatabaseTestCase
                 $test->assertGreaterThanOrEqual($beforeUpdate, $updatedTimestamp ?? 0, 'updatedAt should be set to current time');
                 $test->assertLessThanOrEqual($afterUpdate, $updatedTimestamp ?? 0);
                 $test->assertNotSame(1000, $updatedTimestamp, 'updatedAt should be refreshed from 1000 to current time');
+                $beforeEvent = $test->eventDispatcher->getEvent(BeforeAccountUpdateEvent::class);
+                $test->assertInstanceOf(BeforeAccountUpdateEvent::class, $beforeEvent);
+                $test->assertSame(['username', 'email'], $beforeEvent->getChangedFields());
+                $afterEvent = $test->eventDispatcher->getEvent(AfterAccountUpdateEvent::class);
+                $test->assertInstanceOf(AfterAccountUpdateEvent::class, $afterEvent);
+                $test->assertSame(['username', 'email'], $afterEvent->getChangedFields());
+            },
+        ];
+        yield 'changed field tracking excludes unmodified fields' => [
+            static function (self $test): void {
+                // Unchanged username is excluded, changed email is included.
+                $user = $test->createUser('samename', 'samename@example.com');
+                $userId = (int) $user->getId();
+                $test->expectResponse($test->callback(static fn(array $data): bool => $data['message'] === 'User updated'), 200);
+                $test->createController()->update(username: 'samename', email: 'changed@example.com', id: $userId);
+                $afterEvent = $test->eventDispatcher->getEvent(AfterAccountUpdateEvent::class);
+                $test->assertInstanceOf(AfterAccountUpdateEvent::class, $afterEvent);
+                $test->assertSame(['email'], $afterEvent->getChangedFields());
+
+                // Unchanged email is excluded, changed username is included.
+                $test->eventDispatcher = new EventCaptureDispatcher();
+                $test->responseFactory = $test->createMock(DataResponseFactoryInterface::class);
+                $user = $test->createUser('sameemailuser', 'sameemail@example.com');
+                $userId = (int) $user->getId();
+                $test->expectResponse($test->callback(static fn(array $data): bool => $data['message'] === 'User updated'), 200);
+                $test->createController()->update(username: 'changedname', email: 'sameemail@example.com', id: $userId);
+                $afterEvent = $test->eventDispatcher->getEvent(AfterAccountUpdateEvent::class);
+                $test->assertInstanceOf(AfterAccountUpdateEvent::class, $afterEvent);
+                $test->assertSame(['username'], $afterEvent->getChangedFields());
+
+                // No fields changed at all dispatches no update events.
+                $test->eventDispatcher = new EventCaptureDispatcher();
+                $test->responseFactory = $test->createMock(DataResponseFactoryInterface::class);
+                $user = $test->createUser('nochangeuser', 'nochange@example.com');
+                $userId = (int) $user->getId();
+                $test->expectResponse($test->callback(static fn(array $data): bool => $data['message'] === 'User updated'), 200);
+                $test->createController()->update(id: $userId);
+                $test->assertFalse($test->eventDispatcher->hasEvent(BeforeAccountUpdateEvent::class));
+                $test->assertFalse($test->eventDispatcher->hasEvent(AfterAccountUpdateEvent::class));
             },
         ];
         yield 'without password no history' => [
@@ -422,6 +461,9 @@ final class UserControllerTest extends DatabaseTestCase
                 $updated = User::findById($userId);
                 $test->assertNotNull($updated);
                 $test->assertNotSame($originalHash, $updated->getPasswordHash());
+                $afterEvent = $test->eventDispatcher->getEvent(AfterAccountUpdateEvent::class);
+                $test->assertInstanceOf(AfterAccountUpdateEvent::class, $afterEvent);
+                $test->assertSame(['username', 'email', 'password'], $afterEvent->getChangedFields());
             },
         ];
         yield 'not found returns error' => [
@@ -429,6 +471,29 @@ final class UserControllerTest extends DatabaseTestCase
                 $response = $test->expectResponse(['error' => 'Not found'], 404);
                 $result = $test->createController()->update(id: 999999);
                 $test->assertSame($response, $result);
+            },
+        ];
+        yield 'before update event prevented returns error' => [
+            static function (self $test): void {
+                $user = $test->createUser('testuser5', 'test5@example.com');
+                $userId = (int) $user->getId();
+                $dispatcher = $test->createMock(EventDispatcherInterface::class);
+                $dispatcher->method('dispatch')->willThrowException(new ActionPreventedException('Update prevented'));
+                $controller = new UserController(
+                    config: $test->config,
+                    responseFactory: $test->responseFactory,
+                    passwordGenerator: $test->passwordGenerator,
+                    passwordHistoryService: new PasswordHistoryService(TestPasswordHasherFactory::create(), $test->config),
+                    userCreationHelper: $test->userCreationHelper,
+                    userUpdateHelper: $test->createUserUpdateHelper($test->config, $dispatcher),
+                    eventDispatcher: $test->eventDispatcher,
+                );
+                $response = $test->expectResponse(['error' => 'Update prevented'], 400);
+                $result = $controller->update(username: 'updated5', id: $userId);
+                $test->assertSame($response, $result);
+                $unchanged = User::findById($userId);
+                $test->assertNotNull($unchanged);
+                $test->assertSame('testuser5', $unchanged->getUsername());
             },
         ];
         yield 'previously used password returns error' => [
@@ -485,8 +550,31 @@ final class UserControllerTest extends DatabaseTestCase
             responseFactory: $this->responseFactory,
             passwordGenerator: $this->passwordGenerator,
             passwordHistoryService: new PasswordHistoryService(TestPasswordHasherFactory::create(), $config),
-            userCreationHelper: $this->userCreationHelper,
+            userCreationHelper: $config === $this->config ? $this->userCreationHelper : $this->createUserCreationHelper($config),
+            userUpdateHelper: $this->createUserUpdateHelper($config),
             eventDispatcher: $this->eventDispatcher,
+        );
+    }
+
+    private function createUserCreationHelper(VoytiConfig $config): UserCreationHelper
+    {
+        $passwordHasher = TestPasswordHasherFactory::create();
+
+        return new UserCreationHelper(
+            $this->mailService,
+            new EventCaptureDispatcher(),
+            $passwordHasher,
+            $config,
+            new PasswordHistoryService($passwordHasher, $config),
+        );
+    }
+
+    private function createUserUpdateHelper(VoytiConfig $config, ?EventDispatcherInterface $dispatcher = null): UserUpdateHelper
+    {
+        return new UserUpdateHelper(
+            new SystemClock(),
+            $dispatcher ?? $this->eventDispatcher,
+            new PasswordHistoryService(TestPasswordHasherFactory::create(), $config),
         );
     }
 

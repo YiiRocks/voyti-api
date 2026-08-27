@@ -12,6 +12,7 @@ use YiiRocks\Voyti\Api\Console\RevokeApiTokenCommand;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use YiiRocks\Voyti\Api\tests\Support\DatabaseTestCase;
 use YiiRocks\Voyti\Api\tests\Support\UserFactoryTrait;
+use YiiRocks\Voyti\Clock\SystemClock;
 use YiiRocks\Voyti\Model\UserToken;
 use Yiisoft\Yii\Console\ExitCode;
 
@@ -41,7 +42,7 @@ final class RevokeApiTokenCommandTest extends DatabaseTestCase
     #[DataProvider('executeProvider')]
     public function testExecute(?string $id, ?string $email, ?string $username, int $expectedCode, int $writelnCount): void
     {
-        $apiTokenService = new ApiTokenService();
+        $apiTokenService = new ApiTokenService(new SystemClock());
         $userId = null;
 
         if ($username !== null) {
@@ -80,7 +81,7 @@ final class RevokeApiTokenCommandTest extends DatabaseTestCase
     private function createCommand(?ApiTokenService $apiTokenService = null): RevokeApiTokenCommand
     {
         return new RevokeApiTokenCommand(
-            $apiTokenService ?? new ApiTokenService(),
+            $apiTokenService ?? new ApiTokenService(new SystemClock()),
         );
     }
 }

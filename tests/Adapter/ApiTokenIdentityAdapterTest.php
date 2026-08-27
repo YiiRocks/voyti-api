@@ -12,6 +12,7 @@ use YiiRocks\Voyti\Api\ApiConfig;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use YiiRocks\Voyti\Api\tests\Support\DatabaseTestCase;
 use YiiRocks\Voyti\Api\tests\Support\UserFactoryTrait;
+use YiiRocks\Voyti\Clock\SystemClock;
 use YiiRocks\Voyti\Model\User;
 use YiiRocks\Voyti\Model\UserToken;
 
@@ -41,7 +42,7 @@ final class ApiTokenIdentityAdapterTest extends DatabaseTestCase
             $rawToken = 'no-such-token';
         } else {
             $user = $this->createUser('tokenuser', 'token@example.com');
-            $rawToken = (new ApiTokenService())->generate($user);
+            $rawToken = (new ApiTokenService(new SystemClock()))->generate($user);
 
             $token = UserToken::findByCodeAndType($rawToken, UserToken::TYPE_API_ACCESS);
             self::assertNotNull($token);

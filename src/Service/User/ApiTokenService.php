@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace YiiRocks\Voyti\Api\Service\User;
 
+use Psr\Clock\ClockInterface;
 use YiiRocks\Voyti\Model\User;
 use YiiRocks\Voyti\Model\UserToken;
 use Yiisoft\Security\Random;
@@ -14,6 +15,10 @@ use Yiisoft\Security\Random;
  */
 final readonly class ApiTokenService
 {
+    public function __construct(
+        private ClockInterface $clock,
+    ) {}
+
     public function generate(User $user): string
     {
         $rawToken = Random::string(64);
@@ -22,7 +27,7 @@ final readonly class ApiTokenService
         $userToken->setUserId((int) $user->getId());
         $userToken->setType(UserToken::TYPE_API_ACCESS);
         $userToken->setCode(hash('sha256', $rawToken));
-        $userToken->setCreatedAt(time());
+        $userToken->setCreatedAt($this->clock->now()->getTimestamp());
         $userToken->save();
 
         return $rawToken;

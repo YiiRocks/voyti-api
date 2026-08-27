@@ -6,17 +6,19 @@ namespace YiiRocks\Voyti\Api\Controller\V1\User;
 
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Http\Message\ResponseInterface;
+use RuntimeException;
 use YiiRocks\Voyti\Api\Middleware\ApiTokenAuthenticationMiddleware;
 use YiiRocks\Voyti\Event\User\UserEvent;
+use YiiRocks\Voyti\Exception\ActionPreventedException;
 use YiiRocks\Voyti\Model\User;
 use YiiRocks\Voyti\Service\Password\PasswordGeneratorInterface;
 use YiiRocks\Voyti\Service\Password\PasswordHistoryService;
 use YiiRocks\Voyti\Service\User\UserCreationHelper;
+use YiiRocks\Voyti\Service\User\UserUpdateHelper;
 use YiiRocks\Voyti\VoytiConfig;
 use Yiisoft\Data\Db\QueryDataReader;
 use Yiisoft\Data\Paginator\OffsetPaginator;
 use Yiisoft\DataResponse\ResponseFactory\DataResponseFactoryInterface;
-use Yiisoft\Db\Exception\IntegrityException;
 use Yiisoft\Http\Status;
 use Yiisoft\Input\Http\Attribute\Parameter\Body;
 use Yiisoft\Input\Http\Attribute\Parameter\Query;
@@ -37,6 +39,7 @@ final readonly class UserController
         private PasswordGeneratorInterface $passwordGenerator,
         private PasswordHistoryService $passwordHistoryService,
         private UserCreationHelper $userCreationHelper,
+        private UserUpdateHelper $userUpdateHelper,
         private EventDispatcherInterface $eventDispatcher,
     ) {}
 
@@ -50,20 +53,17 @@ final readonly class UserController
     ): ResponseInterface {
         $password = $password !== '' ? $password : $this->passwordGenerator->generate(12);
 
-        $user = $this->userCreationHelper->buildUser($email, $username, $password);
         // Users provisioned through this admin-only API are confirmed immediately; they bypass the
         // email confirmation flow that self-registration goes through.
-        $user->setConfirmedAt(time());
+        $user = $this->userCreationHelper->buildUser($email, $username, $password);
         try {
-            $user->save();
-        } catch (IntegrityException) {
+            $this->userCreationHelper->persistAndNotifySkippingConfirmation($user);
+        } catch (RuntimeException $exception) {
             return $this->responseFactory->createResponse(
-                ['error' => $this->userCreationHelper->findUniquenessConflict($email, $username)],
+                ['error' => $exception->getMessage()],
                 Status::BAD_REQUEST,
             );
         }
-
-        $this->passwordHistoryService->record($user);
 
         return $this->responseFactory->createResponse([
             'id' => $user->getId(),
@@ -157,17 +157,27 @@ final readonly class UserController
             );
         }
 
-        if ($username !== null) {
-            $user->setUsername($username);
-        }
-        if ($email !== null) {
-            $user->setEmail($email);
-        }
-        if ($password !== '') {
-            $this->passwordHistoryService->applyPasswordChange($user, $password);
-        } else {
-            $user->setUpdatedAt(time());
-            $user->save();
+        $changedFields = $this->userUpdateHelper->changedFields($user, $username, $email, $password);
+
+        try {
+            $this->userUpdateHelper->apply(
+                $user,
+                $changedFields,
+                static function (User $user) use ($username, $email): void {
+                    if ($username !== null) {
+                        $user->setUsername($username);
+                    }
+                    if ($email !== null) {
+                        $user->setEmail($email);
+                    }
+                },
+                $password,
+            );
+        } catch (ActionPreventedException $exception) {
+            return $this->responseFactory->createResponse(
+                ['error' => $exception->getMessage()],
+                Status::BAD_REQUEST,
+            );
         }
 
         return $this->responseFactory->createResponse([

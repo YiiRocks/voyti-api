@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace YiiRocks\Voyti\Api\tests\Service\User;
 
+use DateTimeImmutable;
+use Psr\Clock\ClockInterface;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use YiiRocks\Voyti\Api\tests\Support\DatabaseTestCase;
 use YiiRocks\Voyti\Api\tests\Support\UserFactoryTrait;
+use YiiRocks\Voyti\Clock\SystemClock;
 use YiiRocks\Voyti\Model\UserToken;
 
 final class ApiTokenServiceTest extends DatabaseTestCase
@@ -16,7 +19,7 @@ final class ApiTokenServiceTest extends DatabaseTestCase
     public function testGenerate(): void
     {
         $user = $this->createUser('uniquser', 'uniq@example.com');
-        $service = new ApiTokenService();
+        $service = new ApiTokenService(new SystemClock());
 
         $first = $service->generate($user);
         $second = $service->generate($user);
@@ -25,7 +28,13 @@ final class ApiTokenServiceTest extends DatabaseTestCase
         self::assertCount(2, UserToken::findByUserId((int) $user->getId()));
 
         $user = $this->createUser('tokuser', 'tok@example.com');
-        $service = new ApiTokenService();
+        $now = new class implements ClockInterface {
+            public function now(): DateTimeImmutable
+            {
+                return new DateTimeImmutable('@1750000000');
+            }
+        };
+        $service = new ApiTokenService($now);
 
         $rawToken = $service->generate($user);
 
@@ -36,13 +45,13 @@ final class ApiTokenServiceTest extends DatabaseTestCase
         self::assertCount(1, $tokens);
         self::assertSame(UserToken::TYPE_API_ACCESS, $tokens[0]->getType());
         self::assertSame(hash('sha256', $rawToken), $tokens[0]->getCode());
-        self::assertGreaterThan(0, $tokens[0]->getCreatedAt());
+        self::assertSame(1750000000, $tokens[0]->getCreatedAt());
     }
 
     public function testRevokeAllDeletesOnlyApiTokens(): void
     {
         $user = $this->createUser('revokeuser', 'revoke@example.com');
-        $service = new ApiTokenService();
+        $service = new ApiTokenService(new SystemClock());
 
         $service->generate($user);
         $service->generate($user);
