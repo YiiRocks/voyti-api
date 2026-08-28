@@ -93,6 +93,9 @@
         "infection": "Infection - PHP Mutation Testing Framework.",
         "rector": "Rector - automated tool for refactoring and upgrading PHP code."
     },
+    "suggest": {
+        "yiirocks/voyti-api-rate-limiter": "Adds per-user rate limiting to the API's authenticated route groups"
+    },
     "extra": {
         "branch-alias": {
             "dev-main": "1.0.x-dev"

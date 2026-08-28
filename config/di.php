@@ -7,9 +7,11 @@ use YiiRocks\Voyti\Api\ApiConfig;
 use YiiRocks\Voyti\Api\Console\GenerateApiTokenCommand;
 use YiiRocks\Voyti\Api\Console\RevokeApiTokenCommand;
 use YiiRocks\Voyti\Api\Middleware\AccessRuleMiddleware;
+use YiiRocks\Voyti\Api\Middleware\ApiExtensionMiddleware;
 use YiiRocks\Voyti\Api\Middleware\ApiTokenAuthenticationMiddleware;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use Yiisoft\Auth\IdentityWithTokenRepositoryInterface;
+use Yiisoft\Di\Reference\TagReference;
 
 /** @var array $params */
 
@@ -23,8 +25,16 @@ return [
     IdentityWithTokenRepositoryInterface::class => ApiTokenIdentityAdapter::class,
     ApiTokenIdentityAdapter::class => ApiTokenIdentityAdapter::class,
 
-    // API route group wiring: bearer auth + admin check.
+    // API route group wiring: bearer auth, then every middleware tagged
+    // `voyti-api.extension-middleware` (installed extension packages, e.g. rate limiting - see
+    // ApiExtensionMiddleware; wired into every versioned route group, not just v1/), then the admin check.
     ApiTokenAuthenticationMiddleware::class => ApiTokenAuthenticationMiddleware::class,
+    ApiExtensionMiddleware::class => [
+        'class' => ApiExtensionMiddleware::class,
+        '__construct()' => [
+            'extensionMiddlewares' => TagReference::to('voyti-api.extension-middleware'),
+        ],
+    ],
     AccessRuleMiddleware::class => AccessRuleMiddleware::class,
 
     ApiTokenService::class => ApiTokenService::class,
