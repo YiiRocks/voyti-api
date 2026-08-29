@@ -1,6 +1,6 @@
 # Voyti API
 
-REST API base package for [Voyti](https://github.com/YiiRocks/voyti), the Yii3 user-management extension.
+API token authentication, RBAC-admin gating, and OpenAPI spec assembly for [Voyti](https://github.com/YiiRocks/voyti), the Yii3 user-management extension. Resource endpoints (e.g. user CRUD) live in separate packages such as [yiirocks/voyti-api-user](https://github.com/YiiRocks/voyti-api-user), built on top of this one.
 
 [![Packagist Version](https://img.shields.io/packagist/v/yiirocks/voyti-api.svg)](https://packagist.org/packages/yiirocks/voyti-api)
 [![PHP from Packagist](https://img.shields.io/packagist/php-v/yiirocks/voyti-api.svg)](https://php.net/)

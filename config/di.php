@@ -9,6 +9,7 @@ use YiiRocks\Voyti\Api\Console\RevokeApiTokenCommand;
 use YiiRocks\Voyti\Api\Middleware\AccessRuleMiddleware;
 use YiiRocks\Voyti\Api\Middleware\ApiExtensionMiddleware;
 use YiiRocks\Voyti\Api\Middleware\ApiTokenAuthenticationMiddleware;
+use YiiRocks\Voyti\Api\OpenApi\OpenApiSpecBuilder;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use Yiisoft\Auth\IdentityWithTokenRepositoryInterface;
 use Yiisoft\Di\Reference\TagReference;
@@ -36,6 +37,15 @@ return [
         ],
     ],
     AccessRuleMiddleware::class => AccessRuleMiddleware::class,
+
+    // Merges every installed resource package's OpenApiSpecContributorInterface, tagged
+    // `voyti-api.openapi-contributor`, into one openapi.json spec.
+    OpenApiSpecBuilder::class => [
+        'class' => OpenApiSpecBuilder::class,
+        '__construct()' => [
+            'contributors' => TagReference::to('voyti-api.openapi-contributor'),
+        ],
+    ],
 
     ApiTokenService::class => ApiTokenService::class,
     GenerateApiTokenCommand::class => GenerateApiTokenCommand::class,
