@@ -14,7 +14,7 @@ use Yiisoft\Router\Route;
 
 return [
     // JsonDataResponseMiddleware wraps every API response, authenticated or not, so it's registered
-    // once on this outer group and inherited by both nested groups below (middleware propagates down
+    // once on this outer group and inherited by every nested group below (middleware propagates down
     // through Group nesting, parent first).
     Group::create()
         ->middleware(JsonDataResponseMiddleware::class)
@@ -32,9 +32,24 @@ return [
                 )
                 ->routes(...$params['yiirocks/voyti']['api']['routes']),
 
+            // Same middleware, minus AccessRuleMiddleware — any authenticated bearer-token holder.
+            // Contributed via `yiirocks/voyti.api.authenticatedRoutes`.
+            Group::create()
+                ->middleware(
+                    ApiTokenAuthenticationMiddleware::class,
+                    ApiExtensionMiddleware::class,
+                )
+                ->routes(...$params['yiirocks/voyti']['api']['authenticatedRoutes']),
+
+            // No authentication at all, still passes through ApiExtensionMiddleware (e.g. per-IP
+            // rate limiting). Contributed via `yiirocks/voyti.api.publicRoutes`.
+            Group::create()
+                ->middleware(ApiExtensionMiddleware::class)
+                ->routes(...$params['yiirocks/voyti']['api']['publicRoutes']),
+
             // openapi.json merges every installed resource package's OpenApiSpecContributorInterface
             // (see OpenApiSpecBuilder), so it's registered here rather than contributed by a resource
-            // package, and stays outside the authenticated group above since the spec itself must be
+            // package, and stays outside every authenticated group above since the spec itself must be
             // reachable without a bearer token.
             Group::create()
                 ->routes(

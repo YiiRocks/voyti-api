@@ -33,8 +33,49 @@ final readonly class ApiTokenService
         return $rawToken;
     }
 
+    /**
+     * @return list<UserToken> Identified only by their stored hash - the raw token is never
+     * retrievable after {@see self::generate()} returns it once.
+     */
+    public function listActive(User $user): array
+    {
+        return array_values(array_filter(
+            UserToken::findByUserId((int) $user->getId()),
+            static fn(UserToken $token): bool => $token->getType() === UserToken::TYPE_API_ACCESS,
+        ));
+    }
+
     public function revokeAll(User $user): int
     {
         return UserToken::deleteAllByUserIdAndType((int) $user->getId(), UserToken::TYPE_API_ACCESS);
+    }
+
+    public function revokeByHash(User $user, string $hash): bool
+    {
+        /** @var ?UserToken $userToken */
+        $userToken = UserToken::query()
+            ->where(['user_id' => $user->getId(), 'code' => $hash, 'type' => UserToken::TYPE_API_ACCESS])
+            ->one();
+
+        if ($userToken === null) {
+            return false;
+        }
+
+        $userToken->delete();
+
+        return true;
+    }
+
+    public function revokeCurrent(User $user, string $rawToken): bool
+    {
+        $userToken = UserToken::findByUserIdAndCodeAndType((int) $user->getId(), $rawToken, UserToken::TYPE_API_ACCESS);
+
+        if ($userToken === null) {
+            return false;
+        }
+
+        $userToken->delete();
+
+        return true;
     }
 }
