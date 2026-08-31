@@ -9,26 +9,27 @@ use YiiRocks\Voyti\Api\Console\RevokeApiTokenCommand;
 use YiiRocks\Voyti\Api\Middleware\AccessRuleMiddleware;
 use YiiRocks\Voyti\Api\Middleware\ApiExtensionMiddleware;
 use YiiRocks\Voyti\Api\Middleware\ApiTokenAuthenticationMiddleware;
+use YiiRocks\Voyti\Api\Middleware\LocaleMiddleware;
 use YiiRocks\Voyti\Api\OpenApi\OpenApiSpecBuilder;
 use YiiRocks\Voyti\Api\Service\User\ApiTokenService;
 use Yiisoft\Auth\IdentityWithTokenRepositoryInterface;
 use Yiisoft\Di\Reference\TagReference;
+use Yiisoft\I18n\Locale;
+use Yiisoft\I18n\LocaleProvider;
 
 /** @var array $params */
 
 return [
     ApiConfig::class => static fn() => new ApiConfig(
         apiTokenLifespan: $params['yiirocks/voyti']['api']['apiTokenLifespan'] ?? 0,
+        defaultLocale: $params['yiirocks/voyti']['api']['defaultLocale'] ?? 'en',
     ),
 
-    // Token resolution honors API-token expiry. Core still owns `IdentityRepositoryInterface`
-    // (web lookups by ID); this package only overrides the bearer-token path.
+    // Overrides only the bearer-token path; core still owns IdentityRepositoryInterface for web/ID lookups.
     IdentityWithTokenRepositoryInterface::class => ApiTokenIdentityAdapter::class,
     ApiTokenIdentityAdapter::class => ApiTokenIdentityAdapter::class,
 
-    // API route group wiring: bearer auth, then every middleware tagged
-    // `voyti-api.extension-middleware` (installed extension packages, e.g. rate limiting - see
-    // ApiExtensionMiddleware; wired into every versioned route group, not just v1/), then the admin check.
+    // Bearer auth, then every middleware tagged voyti-api.extension-middleware, then the admin check.
     ApiTokenAuthenticationMiddleware::class => ApiTokenAuthenticationMiddleware::class,
     ApiExtensionMiddleware::class => [
         'class' => ApiExtensionMiddleware::class,
@@ -37,9 +38,14 @@ return [
         ],
     ],
     AccessRuleMiddleware::class => AccessRuleMiddleware::class,
+    LocaleMiddleware::class => LocaleMiddleware::class,
 
-    // Merges every installed resource package's OpenApiSpecContributorInterface, tagged
-    // `voyti-api.openapi-contributor`, into one openapi.json spec.
+    // Locale has no default constructor, so this can't be autowired; built from the same defaultLocale.
+    LocaleProvider::class => static fn(ApiConfig $config): LocaleProvider => new LocaleProvider(
+        new Locale($config->defaultLocale),
+    ),
+
+    // Merges every installed OpenApiSpecContributorInterface tagged voyti-api.openapi-contributor.
     OpenApiSpecBuilder::class => [
         'class' => OpenApiSpecBuilder::class,
         '__construct()' => [

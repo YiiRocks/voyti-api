@@ -8,22 +8,20 @@ use YiiRocks\Voyti\Api\Console\RevokeApiTokenCommand;
 return [
     'yiirocks/voyti' => [
         'api' => [
-            // How long (in seconds) an API access token stays valid; 0 means it never expires. Enforced
-            // by ApiTokenIdentityAdapter when resolving a bearer token.
+            // Seconds an API access token stays valid; 0 = never expires. Enforced by ApiTokenIdentityAdapter.
             'apiTokenLifespan' => 0,
 
-            // Route objects contributed by resource packages, wrapped in the shared auth + admin-access
-            // middleware group this package owns in config/routes.php. Not version-scoped: each
-            // package's own Route paths/names carry their own version segment. Cross-package list
-            // merge, same pattern as core's `accountMenuItems`.
+            // Falls back to this locale when `Accept-Language` is missing or matches nothing discovered.
+            'defaultLocale' => 'en',
+
+            // Route objects from resource packages, wrapped in the shared auth+admin middleware group in
+            // routes.php.
             'routes' => [],
 
-            // Same as `routes`, but no admin-access check — for endpoints any authenticated
-            // bearer-token holder may call on their own behalf.
+            // Same as `routes`, but no admin-access check
             'authenticatedRoutes' => [],
 
-            // Same as `routes`, but no authentication at all — for endpoints reachable before a
-            // token exists (login, registration, password-reset request).
+            // Same as `routes`, but no authentication - reachable before a token exists
             'publicRoutes' => [],
         ],
     ],

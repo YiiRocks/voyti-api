@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace YiiRocks\Voyti\Api;
 
+use YiiRocks\Voyti\Api\Middleware\LocaleMiddleware;
+
 /**
  * Single source of truth for this package's settings: an immutable value object injected into
  * services instead of raw params.
@@ -16,5 +18,10 @@ final readonly class ApiConfig
          * tokens never expire.
          */
         public int $apiTokenLifespan,
+
+        /**
+         * Locale {@see LocaleMiddleware} falls back to when nothing in `Accept-Language` matches.
+         */
+        public string $defaultLocale,
     ) {}
 }

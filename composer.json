@@ -3,12 +3,13 @@
     "description": "API token authentication and RBAC-admin infrastructure for the YiiRocks Voyti Yii3 extension",
     "type": "library",
     "keywords": [
-        "yii",
+        "authentication",
+        "bearer-token",
+        "extension",
+        "openapi",
+        "rbac",
         "yii3",
-        "user",
-        "auth",
-        "api",
-        "extension"
+        "yiisoft"
     ],
     "homepage": "https://www.yii.rocks/voyti/api/",
     "license": "BSD-3-Clause",
@@ -34,9 +35,12 @@
         "yiirocks/voyti": "^1.0",
         "yiisoft/auth": "^3.3",
         "yiisoft/data-response": "^2.2",
+        "yiisoft/files": "^2.1",
         "yiisoft/http": "^1.2",
+        "yiisoft/i18n": "^1.2",
         "yiisoft/router": "^4.0",
         "yiisoft/security": "^1.2",
+        "yiisoft/translator": "^3.2",
         "yiisoft/user": "^2.3",
         "yiisoft/yii-console": "^2.3"
     },

@@ -51,7 +51,7 @@ final class ApiTokenIdentityAdapterTest extends DatabaseTestCase
         }
 
         $adapter = new ApiTokenIdentityAdapter(
-            new ApiConfig(apiTokenLifespan: $lifespan),
+            new ApiConfig(apiTokenLifespan: $lifespan, defaultLocale: 'en'),
             $this->createClock(new DateTimeImmutable('@' . $now)),
         );
 
@@ -74,7 +74,7 @@ final class ApiTokenIdentityAdapterTest extends DatabaseTestCase
         $user = $this->createUser('byiduser', 'byid@example.com');
 
         $adapter = new ApiTokenIdentityAdapter(
-            new ApiConfig(apiTokenLifespan: 0),
+            new ApiConfig(apiTokenLifespan: 0, defaultLocale: 'en'),
             $this->createClock(),
         );
 
