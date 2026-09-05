@@ -44,7 +44,7 @@ final class OpenApiControllerTest extends TestCase
 
         self::assertSame('http', $spec['components']['securitySchemes']['bearerAuth']['type']);
         self::assertSame('bearer', $spec['components']['securitySchemes']['bearerAuth']['scheme']);
-        self::assertSame('JWT', $spec['components']['securitySchemes']['bearerAuth']['bearerFormat']);
+        self::assertSame('Opaque', $spec['components']['securitySchemes']['bearerAuth']['bearerFormat']);
         self::assertSame([['bearerAuth' => []]], $spec['security']);
 
         $errorSchema = $spec['components']['schemas']['ErrorResponse'];

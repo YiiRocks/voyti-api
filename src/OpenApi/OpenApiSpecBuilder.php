@@ -74,7 +74,7 @@ final readonly class OpenApiSpecBuilder
                 'bearerAuth' => [
                     'type' => 'http',
                     'scheme' => 'bearer',
-                    'bearerFormat' => 'JWT',
+                    'bearerFormat' => 'Opaque',
                 ],
             ],
         ];
